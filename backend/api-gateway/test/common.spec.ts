@@ -31,6 +31,10 @@ describe('ApiGateway', () => {
           provide: 'PAYMENT_ADAPTER',
           useValue: mockedPaymentAdapter,
         },
+        {
+          provide: 'RMQ_SERVICE',
+          useValue: {},
+        },
       ]
     }).compile();
     service = module.get(GatewayService);
