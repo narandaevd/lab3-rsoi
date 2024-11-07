@@ -3,59 +3,292 @@ on:
   push:
     branches:
       - master
+      - dev
   pull_request:
     branches:
       - master
 jobs:
   build:
-    name: Autograding
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
         with:
-          fetch-depth: 0
+          node-version: '20'
 
-      - uses: docker/setup-buildx-action@v2
+      # - name: Cache Node.js modules
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/.npm
+      #     key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-node-
 
-      # TODO build and run unit tests
+      - name: Install dependencies for ApiGateway
+        working-directory: backend/api-gateway
+        run: npm install
+      - name: Build ApiGateway
+        working-directory: backend/api-gateway
+        run: npm run build
+      - name: Build ApiGateway
+        working-directory: backend/api-gateway
+        run: |
+          docker build -t rsoi_lab2_gateway .
+      - name: Save ApiGateway as tar
+        run: |
+          docker save rsoi_lab2_gateway > rsoi_lab2_gateway.tar
+      - name: Upload ApiGateway
+        uses: actions/upload-artifact@v3
+        with:
+          name: rsoi_lab2_gateway
+          path: rsoi_lab2_gateway.tar
 
-      - name: Build images
-        timeout-minutes: 10
-        run: docker compose build
+      - name: Install dependencies for ReservationService
+        working-directory: backend/reservation
+        run: npm install
+      - name: Build ReservationService
+        working-directory: backend/reservation
+        run: npm run build
+      - name: Build ReservationService
+        working-directory: backend/reservation
+        run: |
+          docker build -t rsoi_lab2_reservation .
+      - name: Save ReservationService as tar
+        run: |
+          docker save rsoi_lab2_reservation > rsoi_lab2_reservation.tar
+      - name: Upload ReservationService
+        uses: actions/upload-artifact@v3
+        with:
+          name: rsoi_lab2_reservation
+          path: rsoi_lab2_reservation.tar
+
+      - name: Install dependencies for LoyaltyService
+        working-directory: backend/loyalty
+        run: npm install
+      - name: Build LoyaltyService
+        working-directory: backend/loyalty
+        run: npm run build
+      - name: Build LoyaltyService
+        working-directory: backend/loyalty
+        run: |
+          docker build -t rsoi_lab2_loyalty .
+      - name: Save LoyaltyService as tar
+        run: |
+          docker save rsoi_lab2_loyalty > rsoi_lab2_loyalty.tar
+      - name: Upload LoyaltyService
+        uses: actions/upload-artifact@v3
+        with:
+          name: rsoi_lab2_loyalty
+          path: rsoi_lab2_loyalty.tar
+
+      - name: Install dependencies for PaymentService
+        working-directory: backend/payment
+        run: npm install
+      - name: Build PaymentService
+        working-directory: backend/payment
+        run: npm run build
+      - name: Build PaymentService
+        working-directory: backend/payment
+        run: |
+          docker build -t rsoi_lab2_payment .
+      - name: Save PaymentService as tar
+        run: |
+          docker save rsoi_lab2_payment > rsoi_lab2_payment.tar
+      - name: Upload PaymentService
+        uses: actions/upload-artifact@v3
+        with:
+          name: rsoi_lab2_payment
+          path: rsoi_lab2_payment.tar
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20'
+
+      # - name: Cache Node.js modules
+      #   uses: actions/cache@v3
+      #   with:
+      #     path: ~/.npm
+      #     key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-node-
+
+      - name: Install dependencies for Gateway
+        working-directory: backend/api-gateway
+        run: npm install
+      - name: Run Gateway tests
+        working-directory: backend/api-gateway
+        run: npm test
+
+      - name: Install dependencies for Reservation
+        working-directory: backend/reservation
+        run: npm install
+      - name: Run Reservation tests
+        working-directory: backend/reservation
+        run: npm test
+
+      - name: Install dependencies for Loyalty
+        working-directory: backend/loyalty
+        run: npm install
+      - name: Run Loyalty tests
+        working-directory: backend/loyalty
+        run: npm test
+
+      - name: Install dependencies for Payment
+        working-directory: backend/payment
+        run: npm install
+      - name: Run Payment tests
+        working-directory: backend/payment
+        run: npm test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download gateway image
+        uses: actions/download-artifact@v3
+        with:
+          name: rsoi_lab2_gateway
+      - name: Download reservation image
+        uses: actions/download-artifact@v3
+        with:
+          name: rsoi_lab2_reservation
+      - name: Download loyalty image
+        uses: actions/download-artifact@v3
+        with:
+          name: rsoi_lab2_loyalty
+      - name: Download payment image
+        uses: actions/download-artifact@v3
+        with:
+          name: rsoi_lab2_payment
+
+      - name: Get commit hash
+        id: get_commit_hash
+        run: echo "COMMIT_HASH=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+      - name: Install ssh keys
+        run: |
+            install -m 600 -D /dev/null ~/.ssh/id_rsa
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+            ssh-keyscan -H ${{ secrets.REMOTE_HOST }} > ~/.ssh/known_hosts
+      - name: Deploy to remote server
+        run: |
+          scp rsoi_lab2_gateway.tar ${{ secrets.REMOTE_USER }}@${{ secrets.REMOTE_HOST }}:/tmp
+          scp rsoi_lab2_reservation.tar ${{ secrets.REMOTE_USER }}@${{ secrets.REMOTE_HOST }}:/tmp
+          scp rsoi_lab2_loyalty.tar ${{ secrets.REMOTE_USER }}@${{ secrets.REMOTE_HOST }}:/tmp
+          scp rsoi_lab2_payment.tar ${{ secrets.REMOTE_USER }}@${{ secrets.REMOTE_HOST }}:/tmp
+          ssh ${{ secrets.REMOTE_USER }}@${{ secrets.REMOTE_HOST }} << 'EOF'
+            mkdir -p /app/rsoi_lab2
+            docker ps --filter name=rsoi_lab2_* --filter status=running -aq | xargs docker stop | xargs docker rm
+            cd /tmp
+            docker load < rsoi_lab2_gateway.tar
+            docker load < rsoi_lab2_reservation.tar
+            docker load < rsoi_lab2_loyalty.tar
+            docker load < rsoi_lab2_payment.tar
+            cd /app/rsoi_lab2
+            docker run -d --name rsoi_lab2_gateway_${{ env.COMMIT_HASH }} --network host rsoi_lab2_gateway
+            docker run -d --name rsoi_lab2_reservation_${{ env.COMMIT_HASH }} --network host rsoi_lab2_reservation
+            docker run -d --name rsoi_lab2_loyalty_${{ env.COMMIT_HASH }} --network host rsoi_lab2_loyalty
+            docker run -d --name rsoi_lab2_payment_${{ env.COMMIT_HASH }} --network host rsoi_lab2_payment
+          EOF
+
+  autograding:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
       - name: Run containers
         timeout-minutes: 5
         run: |
           docker compose up -d
           ./scripts/wait-script.sh
-        env:
-          WAIT_PORTS: 8080,8070,8060,8050
-
-      # TODO setup variant, service and port
 
       - name: Run API Tests
         timeout-minutes: 5
         run: ./scripts/test-script.sh
         env:
-          VARIANT: <variant>
-          SERVICE_NAME: <your service name>
-          PORT_NUMBER: <port number>
+          VARIANT: v2
+          SERVICE_NAME: loyalty
+          PORT_NUMBER: 8050
+
+      - name: Run API Tests
+        uses: matt-ball/newman-action@master
+        with:
+          collection: v2/postman/collection.json
+          environment: v2/postman/environment.json
+          delayRequest: 100
+          reporters: '[ "cli" ]'
 
       - uses: education/autograding@v1
         id: autograder
         continue-on-error: true
 
-      - name: Github auto grader mark
-        uses: Romanow/google-sheet-autograder-marker@v1.0
-        with:
-          google_token: ${{secrets.GOOGLE_API_KEY}}
-          sheet_id: "1xkgjUX6Qmk7rdJG-QPOToav-HWWtthJjnShIKnw3oIY"
-          homework_number: 3
-          user_column: 'D'
-          column_offset: 'F'
-          mark: "'+"
+  # build:
+  #   name: Autograding
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Stop containers
-        if: always()
-        continue-on-error: true
-        run: docker compose down -v
+  #     - uses: docker/setup-buildx-action@v2
+
+  #     # TODO build and run unit tests
+
+  #     - name: Build images
+  #       timeout-minutes: 10
+  #       run: docker compose build
+
+  #     - name: Run containers
+  #       timeout-minutes: 5
+  #       run: |
+  #         docker compose up -d
+  #         ./scripts/wait-script.sh
+  #       env:
+  #         WAIT_PORTS: 8080,8070,8060,8050
+
+  #     # TODO setup variant, service and port
+
+  #     - name: Run API Tests
+  #       timeout-minutes: 5
+  #       run: ./scripts/test-script.sh
+  #       env:
+  #         VARIANT: <variant>
+  #         SERVICE_NAME: <your service name>
+  #         PORT_NUMBER: <port number>
+
+  #     - uses: education/autograding@v1
+  #       id: autograder
+  #       continue-on-error: true
+
+  #     - name: Github auto grader mark
+  #       uses: Romanow/google-sheet-autograder-marker@v1.0
+  #       with:
+  #         google_token: ${{secrets.GOOGLE_API_KEY}}
+  #         sheet_id: "1xkgjUX6Qmk7rdJG-QPOToav-HWWtthJjnShIKnw3oIY"
+  #         homework_number: 3
+  #         user_column: 'D'
+  #         column_offset: 'F'
+  #         mark: "'+"
+
+  #     - name: Stop containers
+  #       if: always()
+  #       continue-on-error: true
+  #       run: docker compose down -v
