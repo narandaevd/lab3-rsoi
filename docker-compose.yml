@@ -37,12 +37,6 @@ services:
       context: backend/loyalty
     ports:
       - 8050:8050
-  
-  mockedservice:
-    build:
-      context: backend/loyalty
-    ports:
-      - 8090:8050
 
   rabbitmq:
     image: rabbitmq:3.10.7-management

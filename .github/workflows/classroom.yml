@@ -225,8 +225,8 @@ jobs:
         run: ./scripts/test-script.sh
         env:
           VARIANT: v2
-          SERVICE_NAME: mockedservice
-          PORT_NUMBER: 8090
+          SERVICE_NAME: loyalty
+          PORT_NUMBER: 8050
 
       - name: Run API Tests
         uses: matt-ball/newman-action@master
