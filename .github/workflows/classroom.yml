@@ -201,10 +201,10 @@ jobs:
             docker load < rsoi_lab2_loyalty.tar
             docker load < rsoi_lab2_payment.tar
             cd /app/rsoi_lab2
-            docker run -d --name rsoi_lab2_gateway_${{ env.COMMIT_HASH }} --network host rsoi_lab2_gateway
-            docker run -d --name rsoi_lab2_reservation_${{ env.COMMIT_HASH }} --network host rsoi_lab2_reservation
-            docker run -d --name rsoi_lab2_loyalty_${{ env.COMMIT_HASH }} --network host rsoi_lab2_loyalty
-            docker run -d --name rsoi_lab2_payment_${{ env.COMMIT_HASH }} --network host rsoi_lab2_payment
+            docker run -d --name rsoi_lab2_gateway_service --network host rsoi_lab2_gateway
+            docker run -d --name rsoi_lab2_reservation_service --network host rsoi_lab2_reservation
+            docker run -d --name rsoi_lab2_loyalty_service --network host rsoi_lab2_loyalty
+            docker run -d --name rsoi_lab2_payment_service --network host rsoi_lab2_payment
           EOF
 
   autograding:

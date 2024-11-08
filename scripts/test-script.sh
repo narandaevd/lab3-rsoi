@@ -37,7 +37,8 @@ step() {
   printf "=== Step %d: %s %s ===\n" "$step" "$operation" "$service"
 
   # docker compose "$operation" "$service"
-  ssh root@195.80.50.221 "docker ps -q --filter \"ancestor=rsoi_lab2_$service\" | xargs docker $operation"
+  # ssh root@195.80.50.221 "docker ps -q --filter \"ancestor=rsoi_lab2_$service\" | xargs docker $operation"
+  ssh root@195.80.50.221 "docker $operation rsoi_lab2_${service}_service"
   if [[ "$operation" == "start" ]]; then
     "$path"/wait-for.sh -t 120 "http://195.80.50.221:$port/manage/health" -- echo "Host 195.80.50.221:$port is active"
   fi
