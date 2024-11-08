@@ -70,7 +70,7 @@ export class GatewayService {
   }
 
   async getMe(username: string) {
-    const loyalty = retry(
+    const loyalty = await retry(
       async () => await this.loyaltyAdapter.get(`loyalty/${username}`),
       MAX_ATTEMPTS
     )
