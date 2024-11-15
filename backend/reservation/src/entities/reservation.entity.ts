@@ -29,13 +29,21 @@ export class Reservation {
   @Column({type: 'text'})
   declare status: Status;
 
-  @Transform(({value}) => new Date(value).toISOString().slice(0, 10), {toPlainOnly: true})
+  @Transform(({value}) => {
+    const d = new Date(value)
+    d.setHours(d.getHours() + 3);
+    return d.toISOString().slice(0, 10);
+  }, {toPlainOnly: true})
   @Column({
     type: 'timestamp with time zone',
   })
   startDate: Date;
 
-  @Transform(({value}) => new Date(value).toISOString().slice(0, 10), {toPlainOnly: true})
+  @Transform(({value}) => {
+    const d = new Date(value)
+    d.setHours(d.getHours() + 3);
+    return d.toISOString().slice(0, 10);
+  }, {toPlainOnly: true})
   @Column({
     type: 'timestamp with time zone',
   })
