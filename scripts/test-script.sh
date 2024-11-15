@@ -39,12 +39,13 @@ step() {
   # docker compose "$operation" "$service"
   # ssh root@195.80.50.221 "docker ps -q --filter \"ancestor=rsoi_lab2_$service\" | xargs docker $operation"
   # ssh root@195.80.50.221 "docker $operation rsoi_lab2_${service}_service"
-  echo "docker ${operation} rsoi_lab2_${service}_service"
-  echo "docker ${operation} rsoi_lab2_${service}_service" | ssh root@195.80.50.221
-  # if [[ "$operation" == "stop" ]]; then
-  #   sleep 30
-  # fi
+  # echo "docker ${operation} rsoi_lab2_${service}_service"
+  # echo "docker ${operation} rsoi_lab2_${service}_service" | ssh root@195.80.50.221
+  if [[ "$operation" == "stop" ]]; then
+    ssh root@195.80.50.221 "docker stop rsoi_lab2_loyalty_service"
+  fi
   if [[ "$operation" == "start" ]]; then
+    ssh root@195.80.50.221 "docker start rsoi_lab2_loyalty_service"
     "$path"/wait-for.sh -t 120 "http://195.80.50.221:$port/manage/health" -- echo "Host 195.80.50.221:$port is active"
   fi
 
