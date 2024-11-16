@@ -230,11 +230,11 @@ jobs:
         timeout-minutes: 5
         run: ./scripts/test-script.sh
         env:
-          USER: ${{ secrets.REMOTE_USER }}
-          HOST: ${{ secrets.REMOTE_HOST }}
           VARIANT: v2
           SERVICE_NAME: loyalty
           PORT_NUMBER: 8050
+          USER: ${{ secrets.REMOTE_USER }}
+          HOST: ${{ secrets.REMOTE_HOST }}
 
       - uses: education/autograding@v1
         id: autograder

@@ -5,6 +5,8 @@ set -e
 variant=${1:-${VARIANT}}
 service=${2:-${SERVICE_NAME}}
 port=${3:-${PORT_NUMBER}}
+ssh_user=${4:-${SSH_USER}}
+ssh_host=${5:-${SSH_HOST}}
 
 path=$(dirname "$0")
 
@@ -36,7 +38,7 @@ step() {
 
   printf "=== Step %d: %s %s ===\n" "$step" "$operation" "$service"
 
-  ssh $USER@$HOST "docker $operation rsoi_lab2_${service}_service"
+  ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
   if [[ "$operation" == "stop" ]]; then
     sleep 30
   fi
