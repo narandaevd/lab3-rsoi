@@ -40,7 +40,7 @@ step() {
 
   ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
   if [[ "$operation" == "start" ]]; then
-    "$path"/wait-for.sh -t 120 "http://195.80.50.221:$port/manage/health" -- echo "Host 195.80.50.221:$port is active"
+    "$path"/wait-for.sh -t 120 "http://$ssh_host:$port/manage/health" -- echo "Host $ssh_host:$port is active"
   fi
 
   newman run \
