@@ -38,12 +38,7 @@ step() {
 
   printf "=== Step %d: %s %s ===\n" "$step" "$operation" "$service"
 
-  printf $ssh_user@$ssh_host
-  # ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
-  ssh root@195.80.50.221 "docker $operation rsoi_lab2_${service}_service"
-  if [[ "$operation" == "stop" ]]; then
-    sleep 30
-  fi
+  ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
   if [[ "$operation" == "start" ]]; then
     "$path"/wait-for.sh -t 120 "http://195.80.50.221:$port/manage/health" -- echo "Host 195.80.50.221:$port is active"
   fi
