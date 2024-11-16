@@ -38,7 +38,9 @@ step() {
 
   printf "=== Step %d: %s %s ===\n" "$step" "$operation" "$service"
 
-  ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
+  printf $ssh_user@$ssh_host
+  # ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
+  ssh root@195.80.50.221 "docker $operation rsoi_lab2_${service}_service"
   if [[ "$operation" == "stop" ]]; then
     sleep 30
   fi
