@@ -14,7 +14,38 @@ services:
     ports:
       - "5432:5432"
 
-# TODO добавить сервисы
+  gateway:
+    build:
+      context: backend/api-gateway
+    ports:
+      - 8080:8080
+
+  reservation:
+    build:
+      context: backend/reservation
+    ports:
+      - 8070:8070
+
+  payment:
+    build:
+      context: backend/payment
+    ports:
+      - 8060:8060
+
+  loyalty:
+    build:
+      context: backend/loyalty
+    ports:
+      - 8050:8050
+
+  rabbitmq:
+    image: rabbitmq:3.10.7-management
+    ports:
+      - 15672:15672
+      - 5672:5672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
 
 volumes:
-  db-data:
+  db-data: {}
+  rabbitmq-data: {}

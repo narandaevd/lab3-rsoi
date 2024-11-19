@@ -5,6 +5,8 @@ set -e
 variant=${1:-${VARIANT}}
 service=${2:-${SERVICE_NAME}}
 port=${3:-${PORT_NUMBER}}
+ssh_user=${4:-${SSH_USER}}
+ssh_host=${5:-${SSH_HOST}}
 
 path=$(dirname "$0")
 
@@ -36,9 +38,9 @@ step() {
 
   printf "=== Step %d: %s %s ===\n" "$step" "$operation" "$service"
 
-  docker compose "$operation" "$service"
+  ssh $ssh_user@$ssh_host "docker $operation rsoi_lab2_${service}_service"
   if [[ "$operation" == "start" ]]; then
-    "$path"/wait-for.sh -t 120 "http://localhost:$port/manage/health" -- echo "Host localhost:$port is active"
+    "$path"/wait-for.sh -t 120 "http://$ssh_host:$port/manage/health" -- echo "Host $ssh_host:$port is active"
   fi
 
   newman run \

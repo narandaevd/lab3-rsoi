@@ -1554,7 +1554,7 @@
 	"variable": [
 		{
 			"key": "baseUrl",
-			"value": "http://localhost:8080"
+			"value": "http://195.80.50.221:8080"
 		},
 		{
 			"key": "hotelUid",
