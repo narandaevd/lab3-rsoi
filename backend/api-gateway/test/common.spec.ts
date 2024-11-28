@@ -21,15 +21,24 @@ describe('ApiGateway', () => {
         GatewayService,
         {
           provide: 'RESERVATION_ADAPTER',
-          useValue: mockedReservationAdapter,
+          useValue: {
+            service: mockedReservationAdapter,
+            pinger: () => Promise.resolve(),
+          },
         },
         {
           provide: 'LOYALTY_ADAPTER',
-          useValue: mockedLoyaltyAdapter,
+          useValue: {
+            service: mockedLoyaltyAdapter,
+            pinger: () => Promise.resolve(),
+          },
         },
         {
           provide: 'PAYMENT_ADAPTER',
-          useValue: mockedPaymentAdapter,
+          useValue: {
+            service: mockedPaymentAdapter,
+            pinger: () => Promise.resolve(),
+          },
         },
         {
           provide: 'RMQ_SERVICE',
