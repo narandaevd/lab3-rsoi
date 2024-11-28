@@ -10,15 +10,36 @@ import {connect} from 'amqplib';
     GatewayService,
     {
       provide: 'RESERVATION_ADAPTER',
-      useValue: axios.create({baseURL: 'http://localhost:8070/api/v1'}),
+      useFactory: () => {
+        const service = axios.create({baseURL: 'http://localhost:8070/api/v1'});
+        const pinger = axios.create({baseURL: 'http://localhost:8070/manage/health'});
+        return {
+          service,
+          pinger: async () => await pinger.get('/'),
+        };
+      },
     },
     {
       provide: 'LOYALTY_ADAPTER',
-      useValue: axios.create({baseURL: 'http://localhost:8050/api/v1'}),
+      useFactory: () => {
+        const service = axios.create({baseURL: 'http://localhost:8050/api/v1'});
+        const pinger = axios.create({baseURL: 'http://localhost:8050/manage/health'});
+        return {
+          service,
+          pinger: async () => await pinger.get('/'),
+        };
+      },
     },
     {
       provide: 'PAYMENT_ADAPTER',
-      useValue: axios.create({baseURL: 'http://localhost:8060/api/v1'}),
+      useFactory: () => {
+        const service = axios.create({baseURL: 'http://localhost:8060/api/v1'});
+        const pinger = axios.create({baseURL: 'http://localhost:8060/manage/health'});
+        return {
+          service,
+          pinger: async () => await pinger.get('/'),
+        };
+      },
     },
     {
       provide: "RMQ_SERVICE",

@@ -1,8 +1,8 @@
 import { DefaultValuePipe, Get, Inject, Injectable, NotFoundException, ParseIntPipe, Query } from "@nestjs/common";
 import axios, { AxiosInstance, AxiosResponse } from "axios";
 import { CreateReservationRequest } from "dtos";
-import { retry } from "./retrier";
 import { Channel, Connection } from "amqplib";
+import { CircuitBreaker } from "./circuit-breaker";
 
 const extractData = (res: AxiosResponse) => res.data as any;
 
@@ -22,37 +22,62 @@ const markedPaymentServiceErrorReaction = markServiceUnavailableErrorReaction('P
 export class GatewayService {
   constructor(
     @Inject('RESERVATION_ADAPTER')
-    private readonly reservationAdapter: AxiosInstance,
+    reservationServices: {
+      service: AxiosInstance;
+      pinger: () => Promise<void>;
+    },
     @Inject('LOYALTY_ADAPTER')
-    private readonly loyaltyAdapter: AxiosInstance,
+    loyaltyServices: {
+      service: AxiosInstance;
+      pinger: () => Promise<void>;
+    },
     @Inject('PAYMENT_ADAPTER')
-    private readonly paymentAdapter: AxiosInstance,
+    paymentServices: {
+      service: AxiosInstance;
+      pinger: () => Promise<void>;
+    },
     @Inject('RMQ_SERVICE')
     private readonly rmqConnection: Connection,
-  ) {}
-
-  private retryChannel: Channel;
-  private retryQueueName = 'retryQueueName';
-
-  async onModuleInit(): Promise<void> {
-    this.retryChannel = await this.rmqConnection.createChannel();
-    await this.retryChannel.assertQueue(this.retryQueueName);
-    this.retryChannel.consume(this.retryQueueName, async (msg) => {
-      try {
-        console.log("CONSUMED");
-        const params = JSON.parse(msg.content.toString());
-        await this.loyaltyAdapter.put(`loyalty/reservation_count`, params);
-      } catch (err) {
-        console.log("ERR ON CONSUME");
-        setTimeout(() => this.retryChannel.sendToQueue(this.retryQueueName, msg.content), 10 * 1000);
-      }
+  ) {
+    this.reservationAdapter = reservationServices.service;
+    this.loyaltyAdapter = loyaltyServices.service;
+    this.paymentAdapter = paymentServices.service;
+    this.reservationCB = new CircuitBreaker({
+      maxAttempts: MAX_ATTEMPTS, 
+      pingCallback: async () => {
+        await reservationServices.pinger();
+      },
+      intervalInMs: 5 * 1000,
+    });
+    this.loyaltyCB = new CircuitBreaker({
+      maxAttempts: MAX_ATTEMPTS, 
+      pingCallback: async () => {
+        await loyaltyServices.pinger();
+      },
+      intervalInMs: 1 * 1000,
+    });
+    this.paymentCB = new CircuitBreaker({
+      maxAttempts: MAX_ATTEMPTS, 
+      pingCallback: async () => {
+        await paymentServices.pinger();
+      },
+      intervalInMs: 5 * 1000,
     });
   }
 
+  private reservationAdapter: AxiosInstance;
+  private loyaltyAdapter: AxiosInstance;
+  private paymentAdapter: AxiosInstance;
+  private retryChannel: Channel;
+  private retryQueueName = 'retryQueueName';
+
+  reservationCB: CircuitBreaker;
+  loyaltyCB: CircuitBreaker;
+  paymentCB: CircuitBreaker;
+
   async getHotels(params: {page: number; size: number}) {
-    return await retry(
+    return await this.reservationCB.try(
       async () => await this.reservationAdapter.get('hotels', {params}),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedReservationServiceErrorReaction);
@@ -70,29 +95,26 @@ export class GatewayService {
   }
 
   async getMe(username: string) {
-    const loyalty = await retry(
-      async () => await this.loyaltyAdapter.get(`loyalty/${username}`),
-      MAX_ATTEMPTS
+    const loyalty = await this.loyaltyCB.try(
+      async () => await this.loyaltyAdapter.get(`loyalty/${username}`)
     )
       .then(extractData)
       .catch(() => '');
-    const reservations = await retry(
+    const reservations = await this.reservationCB.try(
       async () => await this.reservationAdapter.get('reservations', {
         headers: {
           'X-User-Name': username,
         }
       }),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedReservationServiceErrorReaction);
-    const payments = await retry(
+    const payments = await this.paymentCB.try(
       async () => await this.paymentAdapter.get('payments', {
         params: {
           uids: JSON.stringify(reservations.map(r => r.paymentUid)),
         }
       }),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(() => []);
@@ -122,21 +144,19 @@ export class GatewayService {
   async getUserReservations(
     username: string
   ) {
-    const reservations = await retry(
+    const reservations = await this.reservationCB.try(
       async () => await this.reservationAdapter.get(`reservations`, {
         headers: {'X-User-Name': username},
       }),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedReservationServiceErrorReaction);
-    const payments = await retry(
+    const payments = await this.paymentCB.try(
       async () => await this.paymentAdapter.get('payments', {
         params: {
           uids: JSON.stringify(reservations.map(r => r.paymentUid)),
         }
       }),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(() => []);
@@ -150,26 +170,23 @@ export class GatewayService {
   }
 
   async createReservation(username: string, dto: CreateReservationRequest) {
-    const hotel = await retry(
+    const hotel = await this.reservationCB.try(
       async () => await this.reservationAdapter.get(`hotels/${dto.hotelUid}`),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedReservationServiceErrorReaction);
-    const loyalty = await retry(
+    const loyalty = await this.reservationCB.try(
       async () => await this.loyaltyAdapter.get(`loyalty/${username}`), 
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedLoyaltyServiceErrorReaction);
     const rawPrice = this.getNumberOfNights(new Date(dto.startDate), new Date(dto.endDate)) * hotel.price;
     const priceWithDiscount = rawPrice - (rawPrice * loyalty.discount / 100.0);
-    const payment = await retry(
+    const payment = await this.paymentCB.try(
       async () => await this.paymentAdapter.post('payments', {
         price: priceWithDiscount,
         status: "PAID",
       }),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedPaymentServiceErrorReaction);
@@ -181,9 +198,8 @@ export class GatewayService {
     })
       .then(extractData)
       .catch(markedPaymentServiceErrorReaction)
-    await retry(
+    await this.loyaltyCB.try(
       async () => await this.loyaltyAdapter.put(`loyalty/reservation_count`, {strategy: 'INCREMENT', username}), 
-      MAX_ATTEMPTS
     )
       .catch(async err => {
         await this.paymentAdapter.delete(`payments/${payment.paymentUid}`),
@@ -196,10 +212,7 @@ export class GatewayService {
   }
 
   async cancelReservation(username: string, uid: string) {
-    const reservationToCancel = await retry(
-      async () => await await this.getUserReservationByUid(uid, username),
-      MAX_ATTEMPTS,
-    )
+    const reservationToCancel = await this.getUserReservationByUid(uid, username)
       .catch(markedReservationServiceErrorReaction);
     if (reservationToCancel.status === 'CANCELED')
       throw new NotFoundException('Уже отменена бронь');
@@ -208,15 +221,13 @@ export class GatewayService {
         'X-User-Name': username,
       }
     });
-    await retry(
+    await this.paymentCB.try(
       async () => await this.paymentAdapter.delete(`payments/${reservationToCancel.paymentUid}`),
-      MAX_ATTEMPTS,
     )
       .catch(markedPaymentServiceErrorReaction);
     const changeReservationCountParams = {strategy: 'DECREMENT', username};
-    await retry(
+    await this.loyaltyCB.try(
       async () => await this.loyaltyAdapter.put(`loyalty/reservation_count`, changeReservationCountParams),
-      MAX_ATTEMPTS,
     )
       .catch(() => {
         console.log('SENDED TO QUEUE');
@@ -232,19 +243,17 @@ export class GatewayService {
     reservationUid: string,
     username: string
   ) {
-    const reservation = await retry(
+    const reservation = await this.reservationCB.try(
       async () => await this.reservationAdapter.get(`reservations/${reservationUid}`, {
         headers: {'X-User-Name': username},
       }),
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedReservationServiceErrorReaction);
     reservation.hotel.fullAddress = buildFullAddress(reservation.hotel);
     reservation.hotel.address = undefined;
-    const payment = await retry(
+    const payment = await this.paymentCB.try(
       async () => await this.paymentAdapter.get(`payments/${reservation.paymentUid}`),
-      MAX_ATTEMPTS,
     )
       .then(extractData)
       .catch(() => '');
@@ -253,12 +262,26 @@ export class GatewayService {
   }
 
   async getLoyalty(username: string) {
-    return await retry(
+    return await this.loyaltyCB.try(
       async () => await this.loyaltyAdapter.get(`loyalty/${username}`), 
-      MAX_ATTEMPTS
     )
       .then(extractData)
       .catch(markedLoyaltyServiceErrorReaction);
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.retryChannel = await this.rmqConnection.createChannel();
+    await this.retryChannel.assertQueue(this.retryQueueName);
+    this.retryChannel.consume(this.retryQueueName, async (msg) => {
+      try {
+        console.log("CONSUMED");
+        const params = JSON.parse(msg.content.toString());
+        await this.loyaltyAdapter.put(`loyalty/reservation_count`, params);
+      } catch (err) {
+        console.log("ERR ON CONSUME");
+        setTimeout(() => this.retryChannel.sendToQueue(this.retryQueueName, msg.content), 10 * 1000);
+      }
+    });
   }
 }
 
