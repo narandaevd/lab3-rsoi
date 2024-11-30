@@ -280,6 +280,8 @@ export class GatewayService {
       } catch (err) {
         console.log("ERR ON CONSUME");
         setTimeout(() => this.retryChannel.sendToQueue(this.retryQueueName, msg.content), 10 * 1000);
+      } finally {
+        this.retryChannel.ack(msg);
       }
     });
   }
